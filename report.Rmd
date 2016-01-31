@@ -1,0 +1,115 @@
+---
+title: "Practical Machine Learning"
+author: "Lynette Garcia"
+date: "31 de enero de 2016"
+output: html_document
+---
+
+##Introduction  
+One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, we will using data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants.  
+## Preparing environment 
+
+### Loading Data and libraries
+
+**Note**: The .csv files must be in your working directory
+```{r message=FALSE, warning=FALSE}
+training<- read.csv("pml-training.csv")
+testing<- read.csv("pml-testing.csv")
+
+#Loading libraries
+library(caret)
+library(rattle)
+
+set.seed(54321)
+```
+
+##Preprocessing 
+First of all we did some preprosessing task to the training data set. We had to delete columns which all row values was NA. This preprocessing task was made in both data sets training and testing.
+
+We splited the training dataset in two datasets in order to check the accuracy of algorithms
+```{r}
+
+#Creating a test set from training set to test models accuracy
+inTrain<-createDataPartition(y=training$classe, p=0.7, list=FALSE)
+trainingSet<-training[inTrain,]
+testingSet<-training[-inTrain,]
+dim(trainingSet); dim(testingSet)
+
+```
+
+Then, we did a near zero values test so we could omit non usefull predictors.
+
+```{r}
+#Near Zero Values
+nzv<-nearZeroVar(trainingSet,saveMetrics = TRUE)
+
+#Removing near zero variables
+trainingSet<-trainingSet[,nzv$nzv==FALSE]
+testingSet<-testingSet[,nzv$nzv==FALSE]
+
+```
+
+We deleted columns in which all values were NAs
+
+```{r}
+#Deleting Columns with NA in the training set
+trainingSet <- trainingSet[, colSums(is.na(trainingSet)) == 0]
+#deleting columns with NA in the testing set
+testingSet <- testingSet[, colSums(is.na(testingSet)) == 0]
+
+```
+
+Then we omited id, usernames and timeStamp columns because it doesn't had usefull information for prediction.  
+```{r}
+trainingSet<-trainingSet[,-seq(1:5)]
+testingSet<-testingSet[,-seq(1:5)]
+
+```
+We prepared the testing dataset in order to have the same columns than training dataset.  
+```{r}
+testing<-testing[colnames(testingSet[,-54])]
+```
+
+##Fitting the models.  
+After that, we fitted several models.   
+
+####Decision trees
+```{r message=FALSE, warning=FALSE}
+modelTree<-train(classe~.,data=trainingSet,method="rpart")
+predTrees<-predict(modelTree,testingSet)
+
+```
+
+```{r fig.height=10, fig.width=8}
+fancyRpartPlot(modelTree$finalModel)
+```
+  
+As you see this method doesn't have a high accuracy with this data. So another methods were tested.  
+
+```{r}
+cm<-confusionMatrix(testingSet$classe, predTrees)
+
+cm$overall
+cm$table
+```
+  
+We fitted a random forest model
+
+```{r message=FALSE, warning=FALSE}
+fitControl <- trainControl(method="cv", number=3, verboseIter=F)
+modelrf<-train(classe ~ .,data=trainingSet, method="rf", trControl=fitControl)
+predrf<-predict(modelrf,newdata=testingSet)
+
+``` 
+
+As this method's accuracy was **99%** it can be considered as a better approach for this problem.
+
+```{r echo=FALSE}
+confusionMatrix(testingSet$classe, predrf)
+```
+After training the model we can predict using the given testing data set.
+
+```{r results='hide'}
+predTest<-predict(modelrf,newdata=testing)
+data.frame(id=seq(1:20), classe=predTest)
+```
